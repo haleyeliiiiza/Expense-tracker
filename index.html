@@ -8,41 +8,27 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
-  /* Layout: iOS-style grouped lists under a sticky large-title header with a segmented control */
+  /* Single light theme: white background, black text. Layout: iOS-style grouped lists under a sticky large-title header with a segmented control */
   :root {
-    --bg: #f2f2f7;
+    --bg: #ffffff;
     --card: #ffffff;
     --fill: #f2f2f7;
-    --text: #1c1c1e;
-    --muted: #8e8e93;
+    --text: #000000;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
     --sep: rgba(60, 60, 67, 0.12);
     --accent: #007aff;
     --accent-soft: rgba(0, 122, 255, 0.12);
     --green: #34c759;
     --orange: #ff9500;
     --red: #ff3b30;
-    --header: rgba(242, 242, 247, 0.82);
+    --header: rgba(255, 255, 255, 0.86);
     --seg: rgba(118, 118, 128, 0.12);
     --seg-active: #ffffff;
+    color-scheme: light;
     --scrim: rgba(0, 0, 0, 0.32);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+    --shadow: 0 0 0 1px var(--border);
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #000000; --card: #1c1c1e; --fill: #2c2c2e; --text: #f2f2f7; --muted: #8e8e93;
-      --sep: rgba(84, 84, 88, 0.6); --accent: #0a84ff; --accent-soft: rgba(10, 132, 255, 0.2);
-      --green: #30d158; --orange: #ff9f0a; --red: #ff453a; --header: rgba(0, 0, 0, 0.78);
-      --seg: rgba(118, 118, 128, 0.24); --seg-active: #636366; --scrim: rgba(0, 0, 0, 0.55); --shadow: none;
-      color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #000000; --card: #1c1c1e; --fill: #2c2c2e; --text: #f2f2f7; --muted: #8e8e93;
-    --sep: rgba(84, 84, 88, 0.6); --accent: #0a84ff; --accent-soft: rgba(10, 132, 255, 0.2);
-    --green: #30d158; --orange: #ff9f0a; --red: #ff453a; --header: rgba(0, 0, 0, 0.78);
-    --seg: rgba(118, 118, 128, 0.24); --seg-active: #636366; --scrim: rgba(0, 0, 0, 0.55); --shadow: none;
-    color-scheme: dark;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   [hidden] { display: none !important; }
@@ -77,7 +63,7 @@
     font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1;
     padding: 8px 0; border-radius: 7px; cursor: pointer;
   }
-  .segmented button.active { background: var(--seg-active); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .segmented button.active { background: var(--seg-active); box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 0.5px rgba(0,0,0,.06); }
 
   main {
     max-width: 880px; margin: 0 auto;
