@@ -11,6 +11,7 @@ A clean, Apple-style expense tracker for business costs. It runs entirely in you
 - Category-by-month table with row and column totals
 
 **Add**
+- **Attach a PDF** invoice or receipt: the app reads it and fills in the amount, date, payee, and (when it can tell) the category and payment method. The PDF stays attached to the expense and can be viewed anytime. Scanned PDFs without text attach fine but need the details typed in.
 - Record amount, category, date, who you paid and how you paid, plus an optional note
 - Any date works: past months, this month or future months
 - **Repeat monthly** creates a series of monthly entries (rent, subscriptions, payroll). Pick a past start date to backfill or a future one to schedule ahead.
@@ -31,4 +32,4 @@ To use it from your phone or any computer, turn on **GitHub Pages**: Settings â†
 
 ## Your data
 
-Expenses are saved in the browser's local storage on the device you use. They don't sync between devices automatically. Use **Download backup** regularly, and **Restore from backup** to move data to another device.
+Expenses are saved in the browser's local storage, and attached PDFs in the browser's IndexedDB, on the device you use. They don't sync between devices automatically. Use **Back up all data** regularly (backups from the site include attached PDFs), and **Restore from backup** to move data to another device.

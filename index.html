@@ -230,6 +230,38 @@
   .sheet .btn { padding: 14px; }
   .sheet .btn-plain { background: var(--fill); box-shadow: none; }
 
+  /* Attachments */
+  .attach-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+  .file-icon {
+    width: 34px; height: 42px; flex: none; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  }
+  .attach-actions { display: flex; gap: 2px; flex: none; }
+  .status { font-size: 13px; margin: 8px 16px 0; color: var(--muted); }
+  .status.ok { color: var(--accent); }
+  .status.warn { color: var(--orange); }
+  .field input.autofilled, .field select.autofilled {
+    background: var(--accent-soft); border-radius: 8px; padding-left: 8px; padding-right: 8px; margin: 6px 0;
+  }
+  .clip { display: inline-block; width: 13px; height: 13px; margin-left: 6px; vertical-align: -1px; color: var(--muted); }
+  .viewer { position: fixed; inset: 0; z-index: 45; background: var(--bg); display: flex; flex-direction: column; }
+  .viewer-bar {
+    display: flex; align-items: center; gap: 8px; border-bottom: 0.5px solid var(--sep);
+    padding-block: calc(10px + env(safe-area-inset-top, 0px)) 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .viewer-bar .title { font-weight: 600; }
+  .viewer-pages {
+    flex: 1; overflow: auto; background: var(--fill);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .viewer-pages canvas { max-width: 100%; height: auto; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+
   .toast {
     position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
@@ -290,6 +322,24 @@
   <!-- ADD -->
   <section class="view" id="view-add">
     <form id="form" autocomplete="off">
+      <div class="section-title">Receipt or invoice</div>
+      <div class="form-group">
+        <div class="list-row action-row" id="attachPick" tabindex="0">
+          <div class="file-icon">PDF</div>
+          <div class="grow">Attach PDF and fill in details</div>
+        </div>
+        <div class="attach-row" id="attachInfo" hidden>
+          <div class="file-icon">PDF</div>
+          <div class="grow"><div class="title" id="attachName"></div><div class="subtitle" id="attachSize"></div></div>
+          <div class="attach-actions">
+            <button type="button" class="text-btn" id="attachView">View</button>
+            <button type="button" class="text-btn" id="attachRemove" style="color:var(--red)">Remove</button>
+          </div>
+        </div>
+      </div>
+      <p class="status" id="attachStatus" hidden></p>
+      <input type="file" id="attachFile" accept="application/pdf,.pdf" hidden>
+
       <div class="section-title" id="formTitle">New expense</div>
       <div class="form-group">
         <div class="field amount-field">
@@ -377,6 +427,15 @@
   </div>
 </div>
 
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-labelledby="viewerTitle">
+  <div class="viewer-bar">
+    <div class="grow"><div class="title" id="viewerTitle"></div></div>
+    <button type="button" class="text-btn" id="viewerDownload" hidden>Download</button>
+    <button type="button" class="text-btn" id="viewerClose">Done</button>
+  </div>
+  <div class="viewer-pages" id="viewerPages"></div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script>
@@ -401,6 +460,205 @@
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
   const sum = (arr) => arr.reduce((s, e) => s + e.amount, 0);
   const framed = (() => { try { return window.self !== window.top; } catch { return true; } })();
+  const CLIP = `<svg class="clip" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-label="Has PDF"><path d="M13.5 7.5l-5.6 5.6a3.3 3.3 0 01-4.7-4.7l6-6a2.2 2.2 0 013.1 3.1l-6 6a1.1 1.1 0 01-1.6-1.6l5.5-5.5"/></svg>`;
+  const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+
+  // ---------- PDF library (loaded only when needed) ----------
+  const PDFJS_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+  let pdfjsReady = null;
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.src = src; el.onload = res; el.onerror = () => rej(new Error("Could not load " + src));
+      document.head.appendChild(el);
+    });
+  }
+  function getPdfjs() {
+    if (!pdfjsReady) {
+      pdfjsReady = (async () => {
+        await loadScript(PDFJS_BASE + "pdf.min.js");
+        await loadScript(PDFJS_BASE + "pdf.worker.min.js"); // runs the parser on the page itself
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + "pdf.worker.min.js";
+        return window.pdfjsLib;
+      })().catch((e) => { pdfjsReady = null; throw e; });
+    }
+    return pdfjsReady;
+  }
+
+  // ---------- Attachment storage (IndexedDB, on this device) ----------
+  let dbPromise = null;
+  function idb() {
+    return (dbPromise ||= new Promise((res, rej) => {
+      const r = indexedDB.open("biz-expenses-files", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("files");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => { dbPromise = null; rej(r.error); };
+    }));
+  }
+  async function fileOp(mode, fn) {
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const tx = db.transaction("files", mode);
+      const req = fn(tx.objectStore("files"));
+      tx.oncomplete = () => res(req ? req.result : undefined);
+      tx.onerror = () => rej(tx.error);
+      tx.onabort = () => rej(tx.error);
+    });
+  }
+  const putFile = (id, rec) => fileOp("readwrite", (st) => st.put(rec, id));
+  const getFile = (id) => fileOp("readonly", (st) => st.get(id));
+  const delFile = (id) => fileOp("readwrite", (st) => st.delete(id)).catch(() => {});
+  async function gcFiles() {
+    try {
+      const keep = new Set(state.expenses.map((e) => e.attachment?.id).filter(Boolean));
+      const keys = await fileOp("readonly", (st) => st.getAllKeys());
+      for (const k of keys) if (!keep.has(k)) await delFile(k);
+    } catch {}
+  }
+  function bufToB64(buf) {
+    const b = new Uint8Array(buf); let out = "";
+    for (let i = 0; i < b.length; i += 0x8000) out += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+    return btoa(out);
+  }
+  function b64ToBuf(b64) {
+    const bin = atob(b64); const b = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return b.buffer;
+  }
+
+  // ---------- Reading invoice details from PDF text ----------
+  async function pdfLines(bytes) {
+    const lib = await getPdfjs();
+    const task = lib.getDocument({ data: new Uint8Array(bytes.slice(0)) });
+    const doc = await task.promise;
+    const lines = [], segs = [];
+    for (let i = 1; i <= Math.min(doc.numPages, 3); i++) {
+      const page = await doc.getPage(i);
+      const tc = await page.getTextContent();
+      const rows = [];
+      for (const it of tc.items) {
+        if (!it.str || !it.str.trim()) continue;
+        const y = it.transform[5], x = it.transform[4];
+        let r = rows.find((row) => Math.abs(row.y - y) <= 3);
+        if (!r) { r = { y, parts: [] }; rows.push(r); }
+        r.parts.push({ x, w: it.width || 0, s: it.str });
+      }
+      rows.sort((a, b) => b.y - a.y);
+      for (const r of rows) {
+        const parts = r.parts.sort((a, b) => a.x - b.x);
+        lines.push(parts.map((q) => q.s).join(" ").replace(/\s+/g, " ").trim());
+        // Separate columns (big horizontal gaps) for picking out the business name
+        let cur = [], end = -Infinity;
+        for (const q of parts) {
+          if (cur.length && q.x - end > 24) { segs.push(cur.join(" ").replace(/\s+/g, " ").trim()); cur = []; }
+          cur.push(q.s); end = q.x + q.w;
+        }
+        if (cur.length) segs.push(cur.join(" ").replace(/\s+/g, " ").trim());
+      }
+    }
+    task.destroy();
+    return { lines: lines.filter(Boolean), segs: segs.filter(Boolean) };
+  }
+
+  const MONEY_RE = /(?:CA?\$|\$)?\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+\.\d{2})(?!\d)/g;
+  const moneysIn = (l) => [...l.matchAll(MONEY_RE)].map((m) => parseFloat(m[1].replace(/,/g, ""))).filter((v) => v > 0 && v < 1e7);
+
+  function findAmount(lines) {
+    const strong = /(amount\s+due|total\s+due|balance\s+due|grand\s+total|total\s+amount|amount\s+paid|total\s+paid|invoice\s+total|new\s+charges|\btotal\b)/i;
+    const notTotal = /(sub\s*-?\s*total|total\s+tax|tax\s+total|\bgst\b|\bhst\b|\bpst\b|previous|savings|discount)/i;
+    let best = null;
+    lines.forEach((l, i) => {
+      if (!strong.test(l)) return;
+      if (notTotal.test(l) && !/(grand|due|paid)/i.test(l)) return;
+      let vals = moneysIn(l);
+      if (!vals.length && lines[i + 1]) vals = moneysIn(lines[i + 1]);
+      if (!vals.length) return;
+      const v = vals[vals.length - 1];
+      const score = /(due|grand|paid)/i.test(l) ? 2 : 1;
+      if (!best || score > best.score || (score === best.score && v >= best.v)) best = { v, score };
+    });
+    if (best) return best.v;
+    const all = lines.flatMap(moneysIn);
+    return all.length ? Math.max(...all) : null;
+  }
+
+  const MONTH_NUM = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  function datesIn(l) {
+    const out = []; let m;
+    const iso = /\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/g;
+    while ((m = iso.exec(l))) out.push([+m[1], +m[2], +m[3]]);
+    const num = /\b(\d{1,2})[\/.-](\d{1,2})[\/.-](20\d{2})\b/g;
+    while ((m = num.exec(l))) { const a = +m[1], b = +m[2]; out.push(a > 12 && b <= 12 ? [+m[3], b, a] : [+m[3], a, b]); }
+    const mdy = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b/gi;
+    while ((m = mdy.exec(l))) out.push([+m[3], MONTH_NUM[m[1].toLowerCase()], +m[2]]);
+    const dmy = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(20\d{2})\b/gi;
+    while ((m = dmy.exec(l))) out.push([+m[3], MONTH_NUM[m[2].toLowerCase()], +m[1]]);
+    return out.filter(([, mo, d]) => mo >= 1 && mo <= 12 && d >= 1 && d <= 31).map(([y, mo, d]) => `${y}-${pad(mo)}-${pad(d)}`);
+  }
+  function findDate(lines) {
+    const pref = /(invoice\s+date|bill(?:ing)?\s+date|statement\s+date|issue[d]?\s+(?:date|on)|date\s+issued|transaction\s+date|payment\s+date|order\s+date|\bdate\b)/i;
+    for (const l of lines) if (pref.test(l) && !/due/i.test(l)) { const d = datesIn(l); if (d.length) return d[0]; }
+    for (const l of lines) if (!/(due|period|through|to\s+\w+\s+\d)/i.test(l)) { const d = datesIn(l); if (d.length) return d[0]; }
+    return lines.flatMap(datesIn)[0] || null;
+  }
+
+  function findPayee(lines, segs, text) {
+    const known = [...new Set(state.expenses.filter((e) => !e.sample).map((e) => e.payee))].sort((a, b) => b.length - a.length);
+    const low = text.toLowerCase();
+    const k = known.find((p) => p.length >= 3 && low.includes(p.toLowerCase()));
+    if (k) return { payee: k, known: true };
+    for (const l of lines) {
+      const m = l.match(/^(?:from|vendor|merchant|payee|billed\s+by|sold\s+by|supplier)\s*:\s*(.{3,60})$/i);
+      if (m) return { payee: m[1].trim(), known: false };
+    }
+    const skip = /(invoice|receipt|statement|bill\s+to|ship\s+to|sold\s+to|page\s+\d|date|total|amount|tax|gst|hst|phone|tel\b|fax|e-?mail|www\.|@|http|order|account|customer|number|\bno\.|#|paid|balance)/i;
+    for (const l of segs.slice(0, 16)) {
+      const t = l.trim();
+      if (t.length < 3 || t.length > 60 || skip.test(t) || /\d{3,}|\$|\d\.\d\d/.test(t) || !/[a-z]{2}/i.test(t)) continue;
+      return { payee: t, known: false };
+    }
+    return null;
+  }
+
+  const CAT_HINTS = [
+    [/\brent\b|lease|landlord|property management/i, "Rent & Lease"],
+    [/payroll|wages|salar/i, "Payroll"],
+    [/insurance|premium|policy\s+(no|number)/i, "Insurance"],
+    [/internet|wireless|mobile|cellular|telecom|long distance/i, "Phone & Internet"],
+    [/hydro|electric|power|energy|natural gas|water bill|utilit/i, "Utilities"],
+    [/fuel|gasoline|diesel|gas bar|petro|litres/i, "Vehicle & Fuel"],
+    [/subscription|software|saas|cloud|workspace|quickbooks|adobe|microsoft 365/i, "Software & Subscriptions"],
+    [/advertis|marketing|\bads\b|promot|campaign/i, "Marketing & Advertising"],
+    [/legal|lawyer|barrister|accounting|accountant|bookkeep|consult/i, "Professional Fees"],
+    [/office supplies|staples|toner|stationery/i, "Office Supplies"],
+    [/hotel|flight|airline|airbnb|boarding/i, "Travel"],
+    [/restaurant|meal|caf[eé]|coffee|catering|dine/i, "Meals & Entertainment"],
+    [/service charge|merchant fee|processing fee|bank fee/i, "Bank & Merchant Fees"],
+    [/property tax|business licen[cs]e|permit|receiver general|canada revenue/i, "Taxes & Licenses"],
+    [/inventory|wholesale|stock order|purchase order/i, "Inventory"],
+    [/equipment|hardware|machinery/i, "Equipment"],
+  ];
+
+  function readInvoice({ lines, segs }) {
+    const text = lines.join("\n");
+    const found = {};
+    const amt = findAmount(lines); if (amt) found.amount = amt;
+    const date = findDate(lines); if (date) found.date = date;
+    const p = findPayee(lines, segs, text);
+    if (p) found.payee = p.payee;
+    const prev = p?.known ? [...state.expenses].reverse().find((e) => e.payee === p.payee) : null;
+    if (prev) {
+      if (state.categories.includes(prev.category)) found.category = prev.category;
+      if (METHODS.includes(prev.method)) found.method = prev.method;
+    }
+    if (!found.category) { const hit = CAT_HINTS.find(([re, c]) => re.test(text) && state.categories.includes(c)); if (hit) found.category = hit[1]; }
+    if (!found.method) {
+      if (/master\s?card/i.test(text)) found.method = "MasterCard";
+      else if (/e-?transfer/i.test(text) && /scotia/i.test(text)) found.method = "Scotia E-Transfer";
+      else if (/e-?transfer/i.test(text) && /\btd\b/i.test(text)) found.method = "TD E-Transfer";
+    }
+    return found;
+  }
 
   // ---------- Sample data (shown until the first real expense) ----------
   function sampleData() {
@@ -708,6 +966,8 @@
     $("submitBtn").textContent = "Add Expense";
     $("deleteBtn").hidden = true;
     $("cancelBtn").hidden = true;
+    setPending(null);
+    setStatus("");
   }
 
   function editExpense(id) {
@@ -728,11 +988,28 @@
     $("submitBtn").textContent = "Save Changes";
     $("deleteBtn").hidden = false;
     $("cancelBtn").hidden = false;
+    setPending(e.attachment ? { ...e.attachment, isNew: false } : null);
+    setStatus("");
     showTab("add");
   }
 
-  $("form").addEventListener("submit", (ev) => {
+  let saving = false;
+  async function commitAttachment() {
+    const old = ui.editingId ? state.expenses.find((x) => x.id === ui.editingId)?.attachment || null : null;
+    if (pending && pending.isNew) {
+      const id = uid();
+      await putFile(id, { name: pending.name, type: "application/pdf", size: pending.size, data: pending.data });
+      if (old) delFile(old.id);
+      return { id, name: pending.name, size: pending.size };
+    }
+    if (pending) return old;
+    if (old) delFile(old.id);
+    return null;
+  }
+
+  $("form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    if (saving) return;
     const amount = Math.round(parseFloat($("amount").value) * 100) / 100;
     if (!(amount > 0)) return;
     const base = {
@@ -742,9 +1019,15 @@
       method: $("method").value,
       note: $("note").value.trim(),
     };
+    let attachment = null;
+    saving = true;
+    try { attachment = await commitAttachment(); }
+    catch { saving = false; setStatus("This browser couldn't save the PDF. Check that it isn't in private browsing mode.", "warn"); return; }
+    saving = false;
     if (ui.editingId) {
       const e = state.expenses.find((x) => x.id === ui.editingId);
       Object.assign(e, base, { date: $("date").value });
+      if (attachment) e.attachment = attachment; else delete e.attachment;
       save();
       toast("Changes saved");
       resetForm();
@@ -756,7 +1039,7 @@
     const count = $("repeat").checked ? Math.min(60, Math.max(2, parseInt($("repeatCount").value, 10) || 2)) : 1;
     const series = count > 1 ? uid() : null;
     for (let i = 0; i < count; i++) {
-      state.expenses.push({ id: uid(), ...base, date: addMonths($("date").value, i), series, created: Date.now() + i });
+      state.expenses.push({ id: uid(), ...base, date: addMonths($("date").value, i), series, created: Date.now() + i, ...(i === 0 && attachment ? { attachment } : {}) });
     }
     lastCategory = base.category;
     save();
@@ -783,6 +1066,7 @@
     });
     if (!choice) return;
     const ids = choice === "all" ? [e.id, ...later.map((x) => x.id)] : [e.id];
+    state.expenses.filter((x) => ids.includes(x.id) && x.attachment).forEach((x) => delFile(x.attachment.id));
     state.expenses = state.expenses.filter((x) => !ids.includes(x.id));
     save();
     toast(ids.length > 1 ? `Deleted ${ids.length} expenses` : "Expense deleted");
@@ -828,7 +1112,7 @@
           <div class="list-row" data-id="${e.id}" tabindex="0">
             <span class="dot" style="background:${colorFor(e.category)}"></span>
             <div class="grow">
-              <div class="title">${esc(e.payee)}${e.date > today ? '<span class="badge">Upcoming</span>' : ""}</div>
+              <div class="title">${esc(e.payee)}${e.attachment ? CLIP : ""}${e.date > today ? '<span class="badge">Upcoming</span>' : ""}</div>
               <div class="subtitle">${esc(e.category)} · ${esc(e.method)} · ${fmtDate(e.date)}${e.note ? " · " + esc(e.note) : ""}</div>
             </div>
             <div class="amount">${money.format(e.amount)}</div>
@@ -874,18 +1158,30 @@
   }
 
   $("exportCsv").addEventListener("click", () => {
-    const rows = [["Date", "Category", "Amount", "Paid To", "Payment Method", "Note"],
-      ...currentList().map((e) => [e.date, e.category, e.amount.toFixed(2), e.payee, e.method, e.note || ""])];
+    const rows = [["Date", "Category", "Amount", "Paid To", "Payment Method", "Note", "Attachment"],
+      ...currentList().map((e) => [e.date, e.category, e.amount.toFixed(2), e.payee, e.method, e.note || "", e.attachment?.name || ""])];
     const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     exportSheet("Export CSV", `${rows.length - 1} expenses. Paste into Excel, Numbers or Google Sheets.`,
       `expenses-${ui.month}-${todayStr()}.csv`, csv, "text/csv");
   });
-  $("backup").addEventListener("click", () => {
-    const json = JSON.stringify({ expenses: state.expenses, categories: state.categories }, null, 2);
-    exportSheet("Back up all data", framed
-        ? "Copy this and save it as a .json file (for example in Notes or Files). Use Restore to load it later."
-        : "Download the file and keep it somewhere safe. Use Restore to load it later.",
-      `expenses-backup-${todayStr()}.json`, json, "application/json");
+  $("backup").addEventListener("click", async () => {
+    const data = { expenses: state.expenses, categories: state.categories };
+    if (!framed) {
+      const files = {};
+      for (const e of state.expenses) {
+        if (!e.attachment) continue;
+        try { const f = await getFile(e.attachment.id); if (f) files[e.attachment.id] = { name: f.name, type: f.type, size: f.size, b64: bufToB64(f.data) }; } catch {}
+      }
+      data.files = files;
+      downloadFile(`expenses-backup-${todayStr()}.json`, JSON.stringify(data), "application/json");
+      toast(Object.keys(files).length ? `Backup downloaded with ${Object.keys(files).length} PDFs` : "Backup downloaded");
+      return;
+    }
+    const n = state.expenses.filter((e) => e.attachment).length;
+    exportSheet("Back up all data",
+      "Copy this and save it as a .json file (for example in Notes or Files). Use Restore to load it later." +
+      (n ? ` Attached PDFs aren't included in a copied backup; use the full app site to back those up.` : ""),
+      `expenses-backup-${todayStr()}.json`, JSON.stringify(data, null, 2), "application/json");
   });
   $("restore").addEventListener("click", () => $("restoreFile").click());
   $("restoreFile").addEventListener("change", async (e) => {
@@ -907,12 +1203,113 @@
     });
     if (!ok) return;
     state = { expenses: data.expenses, categories: data.categories?.length ? data.categories : [...DEFAULT_CATEGORIES] };
+    if (data.files) {
+      for (const [id, f] of Object.entries(data.files)) {
+        try { await putFile(id, { name: f.name, type: f.type || "application/pdf", size: f.size, data: b64ToBuf(f.b64) }); } catch {}
+      }
+    }
+    gcFiles();
     save();
     resetForm();
     showTab("expenses");
     toast("Backup restored");
   });
   $("manageCats").addEventListener("click", async () => { await addCategory(); renderExpenses(); });
+
+  // ---------- Attachment UI ----------
+  let pending = null; // { name, size, data?, id?, isNew }
+  function setPending(p) {
+    pending = p;
+    $("attachPick").hidden = !!p;
+    $("attachInfo").hidden = !p;
+    if (p) { $("attachName").textContent = p.name; $("attachSize").textContent = fmtSize(p.size || 0); }
+  }
+  function setStatus(msg, kind = "") {
+    $("attachStatus").textContent = msg;
+    $("attachStatus").className = "status " + kind;
+    $("attachStatus").hidden = !msg;
+  }
+  function markFilled(el) { el.classList.add("autofilled"); }
+  ["amount", "date", "payee", "category", "method"].forEach((id) =>
+    ["input", "change"].forEach((evt) => $(id).addEventListener(evt, (e) => { if (e.isTrusted) $(id).classList.remove("autofilled"); }))
+  );
+  function clearMarks() { document.querySelectorAll(".autofilled").forEach((el) => el.classList.remove("autofilled")); }
+
+  $("attachPick").addEventListener("click", () => $("attachFile").click());
+  $("attachFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { setStatus("Choose a PDF file.", "warn"); return; }
+    if (file.size > 25 * 1048576) { setStatus("That PDF is over 25 MB. Choose a smaller file.", "warn"); return; }
+    const data = await file.arrayBuffer();
+    setPending({ name: file.name, size: file.size, data, isNew: true });
+    clearMarks();
+    setStatus("Reading the PDF…");
+    let read = { lines: [], segs: [] };
+    try { read = await pdfLines(data); }
+    catch (err) { console.warn("PDF read failed", err); setStatus("The PDF is attached, but it couldn't be read here. Fill in the details yourself.", "warn"); return; }
+    if (read.lines.join("").replace(/\s/g, "").length < 20) {
+      setStatus("The PDF is attached, but it has no readable text (it may be a scan). Fill in the details yourself.", "warn");
+      return;
+    }
+    const f = readInvoice(read);
+    const filled = [];
+    if (f.amount) { $("amount").value = f.amount.toFixed(2); markFilled($("amount")); filled.push("amount"); }
+    if (f.date) { $("date").value = f.date; markFilled($("date")); filled.push("date"); }
+    if (f.payee) { $("payee").value = f.payee; markFilled($("payee")); filled.push("payee"); }
+    if (f.category) { $("category").value = f.category; lastCategory = f.category; markFilled($("category")); filled.push("category"); }
+    if (f.method) { $("method").value = f.method; markFilled($("method")); filled.push("payment method"); }
+    const missing = ["amount", "date", "payee"].filter((k) => !filled.includes(k));
+    const list = (a) => a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a[a.length - 1] : a[0];
+    if (filled.length) setStatus(`Filled in ${list(filled)} from the PDF. Check the highlighted fields before saving.` + (missing.length ? ` Couldn't find the ${list(missing)}.` : ""), "ok");
+    else setStatus("The PDF is attached, but no details could be found in it. Fill them in yourself.", "warn");
+  });
+  $("attachRemove").addEventListener("click", () => { setPending(null); clearMarks(); setStatus(""); });
+  $("attachView").addEventListener("click", () => {
+    if (!pending) return;
+    const p = pending;
+    openViewer(p.name, async () => p.data || (await getFile(p.id))?.data);
+  });
+
+  // ---------- PDF viewer ----------
+  let viewerBytes = null, viewerName = "";
+  async function openViewer(name, getBytes) {
+    viewerName = name;
+    $("viewerTitle").textContent = name;
+    $("viewerPages").innerHTML = `<div class="empty">Loading…</div>`;
+    $("viewerDownload").hidden = true;
+    $("viewer").hidden = false;
+    document.documentElement.style.overflow = "hidden";
+    try {
+      const [lib, bytes] = await Promise.all([getPdfjs(), getBytes()]);
+      if (!bytes) throw new Error("missing");
+      viewerBytes = bytes;
+      $("viewerDownload").hidden = framed;
+      const task = lib.getDocument({ data: new Uint8Array(bytes.slice(0)) });
+      const doc = await task.promise;
+      $("viewerPages").innerHTML = "";
+      const width = Math.min($("viewerPages").clientWidth - 32, 900);
+      const dpr = window.devicePixelRatio || 1;
+      for (let i = 1; i <= doc.numPages; i++) {
+        if ($("viewer").hidden) break;
+        const page = await doc.getPage(i);
+        const base = page.getViewport({ scale: 1 });
+        const vp = page.getViewport({ scale: (width / base.width) * dpr });
+        const c = document.createElement("canvas");
+        c.width = vp.width; c.height = vp.height; c.style.width = width + "px";
+        $("viewerPages").appendChild(c);
+        await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+      }
+      task.destroy();
+    } catch {
+      $("viewerPages").innerHTML = `<div class="empty">This PDF couldn't be opened.</div>`;
+    }
+  }
+  function closeViewer() { $("viewer").hidden = true; $("viewerPages").innerHTML = ""; viewerBytes = null; document.documentElement.style.overflow = ""; }
+  $("viewerClose").addEventListener("click", closeViewer);
+  $("viewerDownload").addEventListener("click", () => { if (viewerBytes) downloadFile(viewerName, viewerBytes, "application/pdf"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("viewer").hidden) closeViewer(); });
 
   // ---------- Init ----------
   resetForm();
