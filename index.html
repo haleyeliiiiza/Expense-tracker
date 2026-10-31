@@ -402,10 +402,7 @@
     "Travel", "Meals & Entertainment", "Phone & Internet", "Bank & Merchant Fees",
     "Taxes & Licenses", "Inventory", "Other"
   ];
-  const METHODS = [
-    "Business Credit Card", "Debit Card", "E-Transfer", "Bank Transfer / EFT",
-    "Pre-Authorized Debit", "Cheque", "Cash", "PayPal", "Other"
-  ];
+  const METHODS = ["MasterCard", "Scotia Debit", "TD Debit"];
   const PALETTE = ["#007aff", "#34c759", "#ff9500", "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00",
                    "#5856d6", "#ff3b30", "#30b0c7", "#a2845e", "#32ade6", "#00c7be", "#8e8e93"];
   const MONTHS_SHORT = ["J","F","M","A","M","J","J","A","S","O","N","D"];
@@ -434,16 +431,16 @@
     const supplies = [64, 0, 142, 38, 0, 95, 51, 0, 128, 73, 0, 88];
     const fuel = [180, 165, 210, 195, 240, 260, 255, 230, 205, 190, 175, 185];
     for (let m = 0; m <= nowM + 2; m++) {
-      add(m, 1, 2400, "Rent & Lease", "Northgate Commercial Leasing", "Pre-Authorized Debit", "Unit 4 lease");
-      add(m, 5, 89.99, "Software & Subscriptions", "Design software", "Business Credit Card", "Monthly plan");
-      add(m, 15, 4200, "Payroll", "Staff payroll", "Bank Transfer / EFT");
-      add(m, 20, 118.5, "Phone & Internet", "Prairie Telecom", "Pre-Authorized Debit");
-      if (m % 3 === 0) add(m, 15, 1200, "Insurance", "Harvest Insurance Group", "Cheque", "Quarterly premium");
+      add(m, 1, 2400, "Rent & Lease", "Northgate Commercial Leasing", "Scotia Debit", "Unit 4 lease");
+      add(m, 5, 89.99, "Software & Subscriptions", "Design software", "MasterCard", "Monthly plan");
+      add(m, 15, 4200, "Payroll", "Staff payroll", "TD Debit");
+      add(m, 20, 118.5, "Phone & Internet", "Prairie Telecom", "Scotia Debit");
+      if (m % 3 === 0) add(m, 15, 1200, "Insurance", "Harvest Insurance Group", "Scotia Debit", "Quarterly premium");
       if (m <= nowM) {
-        add(m, 12, marketing[m % 12], "Marketing & Advertising", "Social media ads", "Business Credit Card");
-        if (supplies[m % 12]) add(m, 8, supplies[m % 12], "Office Supplies", "Staples", "Debit Card");
-        add(m, 24, fuel[m % 12], "Vehicle & Fuel", "Co-op Gas Bar", "Business Credit Card");
-        add(m, 28, 34.75, "Bank & Merchant Fees", "Bank service charge", "Pre-Authorized Debit");
+        add(m, 12, marketing[m % 12], "Marketing & Advertising", "Social media ads", "MasterCard");
+        if (supplies[m % 12]) add(m, 8, supplies[m % 12], "Office Supplies", "Staples", "TD Debit");
+        add(m, 24, fuel[m % 12], "Vehicle & Fuel", "Co-op Gas Bar", "MasterCard");
+        add(m, 28, 34.75, "Bank & Merchant Fees", "Bank service charge", "Scotia Debit");
       }
     }
     return out;
@@ -705,7 +702,7 @@
   $("payee").addEventListener("change", () => {
     const prev = [...state.expenses].reverse().find((e) => e.payee.toLowerCase() === $("payee").value.trim().toLowerCase());
     if (prev && !ui.editingId) {
-      $("method").value = prev.method;
+      if (METHODS.includes(prev.method)) $("method").value = prev.method;
       if (state.categories.includes(prev.category)) { $("category").value = prev.category; lastCategory = prev.category; }
     }
   });
@@ -715,6 +712,7 @@
   function resetForm() {
     ui.editingId = null;
     $("form").reset();
+    $("method").innerHTML = "";
     fillSelects();
     $("date").value = todayStr();
     $("category").value = lastCategory;
@@ -736,6 +734,7 @@
     $("category").value = e.category;
     $("date").value = e.date;
     $("payee").value = e.payee;
+    $("method").innerHTML = [...METHODS, ...(METHODS.includes(e.method) ? [] : [e.method])].map((m) => `<option>${esc(m)}</option>`).join("");
     $("method").value = e.method;
     $("note").value = e.note || "";
     $("repeatBlock").hidden = true;
