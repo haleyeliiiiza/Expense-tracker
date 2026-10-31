@@ -564,22 +564,41 @@
   const moneysIn = (l) => [...l.matchAll(MONEY_RE)].map((m) => parseFloat(m[1].replace(/,/g, ""))).filter((v) => v > 0 && v < 1e7);
 
   function findAmount(lines) {
-    const strong = /(amount\s+due|total\s+due|balance\s+due|grand\s+total|total\s+amount|amount\s+paid|total\s+paid|invoice\s+total|new\s+charges|\btotal\b)/i;
-    const notTotal = /(sub\s*-?\s*total|total\s+tax|tax\s+total|\bgst\b|\bhst\b|\bpst\b|previous|savings|discount)/i;
+    const valueOn = (i) => { let v = moneysIn(lines[i]); if (!v.length && lines[i + 1] && !/[a-z]{3}/i.test(lines[i + 1])) v = moneysIn(lines[i + 1]); return v.length ? v[v.length - 1] : null; };
+    // 1) A pre-tax subtotal line
+    const preTax = /(total\s+(?:excl(?:uding|\.)?|before|w\/?o|without)\s+(?:tax|gst|hst|vat)|amount\s+(?:excl(?:uding|\.)?|before)\s+(?:tax|gst|hst|vat)|pre-?\s?tax|net\s+amount|amount\s+before\s+tax)/i;
+    const subtotal = /\bsub\s*-?\s*total\b/i;
     let best = null;
+    lines.forEach((l, i) => {
+      const score = preTax.test(l) ? 2 : subtotal.test(l) ? 1 : 0;
+      if (!score) return;
+      const v = valueOn(i);
+      if (v == null) return;
+      if (!best || score > best.score || (score === best.score && v > best.v)) best = { v, score };
+    });
+    if (best) return best.v;
+
+    // 2) Otherwise the total, minus any tax lines
+    const strong = /(amount\s+due|total\s+due|balance\s+due|grand\s+total|total\s+amount|amount\s+paid|total\s+paid|invoice\s+total|new\s+charges|\btotal\b)/i;
+    const notTotal = /(total\s+tax|tax\s+total|\bgst\b|\bhst\b|\bpst\b|\bqst\b|\bvat\b|previous|savings|discount)/i;
+    let total = null;
     lines.forEach((l, i) => {
       if (!strong.test(l)) return;
       if (notTotal.test(l) && !/(grand|due|paid)/i.test(l)) return;
-      let vals = moneysIn(l);
-      if (!vals.length && lines[i + 1]) vals = moneysIn(lines[i + 1]);
-      if (!vals.length) return;
-      const v = vals[vals.length - 1];
+      const v = valueOn(i);
+      if (v == null) return;
       const score = /(due|grand|paid)/i.test(l) ? 2 : 1;
-      if (!best || score > best.score || (score === best.score && v >= best.v)) best = { v, score };
+      if (!total || score > total.score || (score === total.score && v >= total.v)) total = { v, score };
     });
-    if (best) return best.v;
-    const all = lines.flatMap(moneysIn);
-    return all.length ? Math.max(...all) : null;
+    if (!total) { const all = lines.flatMap(moneysIn); return all.length ? Math.max(...all) : null; }
+
+    const taxWord = /\b(gst|hst|pst|qst|vat|sales\s+tax|tax)\b/i;
+    const notTax = /(registration|reg\.?\s*(?:no|#)|business\s+number|\bbn\b|account|excl|before|pre-?tax|due|grand|amount\s+paid|total\s+(?:amount|due))/i;
+    const totalTax = lines.map((l, i) => (/(total\s+tax|tax\s+total|total\s+(?:gst|hst|vat))/i.test(l) ? valueOn(i) : null)).filter((v) => v != null);
+    let taxes = totalTax.length ? totalTax[totalTax.length - 1]
+      : lines.reduce((sum, l, i) => (taxWord.test(l) && !notTax.test(l) ? sum + (valueOn(i) || 0) : sum), 0);
+    if (taxes > 0 && taxes < total.v) return Math.round((total.v - taxes) * 100) / 100;
+    return total.v;
   }
 
   const MONTH_NUM = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
@@ -611,7 +630,7 @@
       const m = l.match(/^(?:from|vendor|merchant|payee|billed\s+by|sold\s+by|supplier)\s*:\s*(.{3,60})$/i);
       if (m) return { payee: m[1].trim(), known: false };
     }
-    const skip = /(invoice|receipt|statement|bill\s+to|ship\s+to|sold\s+to|page\s+\d|date|total|amount|tax|gst|hst|phone|tel\b|fax|e-?mail|www\.|@|http|order|account|customer|number|\bno\.|#|paid|balance)/i;
+    const skip = /(vat|registration|\breg\b|business\s+number|\bbn\b|\bpst\b|\bqst\b|invoice|receipt|statement|bill\s+to|ship\s+to|sold\s+to|page\s+\d|date|total|amount|tax|gst|hst|phone|tel\b|fax|e-?mail|www\.|@|http|order|account|customer|number|\bno\.|#|paid|balance)/i;
     for (const l of segs.slice(0, 16)) {
       const t = l.trim();
       if (t.length < 3 || t.length > 60 || skip.test(t) || /\d{3,}|\$|\d\.\d\d/.test(t) || !/[a-z]{2}/i.test(t)) continue;

@@ -11,7 +11,7 @@ A clean, Apple-style expense tracker for business costs. It runs entirely in you
 - Category-by-month table with row and column totals
 
 **Add**
-- **Attach a PDF** invoice or receipt: the app reads it and fills in the amount, date, payee, and (when it can tell) the category and payment method. The PDF stays attached to the expense and can be viewed anytime. Scanned PDFs without text attach fine but need the details typed in.
+- **Attach a PDF** invoice or receipt: the app reads it and fills in the amount (the pre-tax subtotal), date, payee, and (when it can tell) the category and payment method. The PDF stays attached to the expense and can be viewed anytime. Scanned PDFs without text attach fine but need the details typed in.
 - Record amount, category, date, who you paid and how you paid, plus an optional note
 - Any date works: past months, this month or future months
 - **Repeat monthly** creates a series of monthly entries (rent, subscriptions, payroll). Pick a past start date to backfill or a future one to schedule ahead.
