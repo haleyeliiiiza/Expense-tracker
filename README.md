@@ -32,4 +32,7 @@ To use it from your phone or any computer, turn on **GitHub Pages**: Settings â†
 
 ## Your data
 
+**Opened in Claude** (the shared Claude link), expenses and attached PDFs are saved to your Claude account and stay in sync across every device where you're signed in.
+
+**Opened from GitHub Pages or as a file:** 
 Expenses are saved in the browser's local storage, and attached PDFs in the browser's IndexedDB, on the device you use. They don't sync between devices automatically. Use **Back up all data** regularly (backups from the site include attached PDFs), and **Restore from backup** to move data to another device.

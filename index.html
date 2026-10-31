@@ -292,6 +292,10 @@
     <button class="text-btn" id="clearSample" type="button">Clear now</button>
   </div>
 
+  <div class="banner" id="syncBanner" role="status" hidden>
+    <div class="grow" id="syncText"></div>
+  </div>
+
   <!-- DASHBOARD -->
   <section class="view active" id="view-dashboard">
     <div class="toolbar">
@@ -510,7 +514,7 @@
   const delFile = (id) => fileOp("readwrite", (st) => st.delete(id)).catch(() => {});
   async function gcFiles() {
     try {
-      const keep = new Set(state.expenses.map((e) => e.attachment?.id).filter(Boolean));
+      const keep = new Set(state.expenses.map((e) => e.attachment && !e.attachment.asset ? e.attachment.id : null).filter(Boolean));
       const keys = await fileOp("readonly", (st) => st.getAllKeys());
       for (const k of keys) if (!keep.has(k)) await delFile(k);
     } catch {}
@@ -710,21 +714,240 @@
   }
 
   // ---------- State ----------
+  // Inside Claude, expenses are saved to the viewer's Claude account and
+  // sync across devices. Anywhere else (e.g. GitHub Pages) they stay in this browser.
+  const hostedInClaude = !!(window.claude && typeof window.claude.use === "function");
+  const bootTime = Date.now();
+  let localHadReal = false;
+  let cloudSettled = !hostedInClaude; // true once we know where data lives
   let state = load();
   const ui = { year: new Date().getFullYear(), month: "all", category: "all", search: "", editingId: null };
 
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s && Array.isArray(s.expenses)) return { expenses: s.expenses, categories: s.categories?.length ? s.categories : [...DEFAULT_CATEGORIES] };
+      if (s && Array.isArray(s.expenses)) {
+        localHadReal = s.expenses.some((e) => !e.sample);
+        return { expenses: s.expenses, categories: s.categories?.length ? s.categories : [...DEFAULT_CATEGORIES], started: !!s.started || localHadReal };
+      }
     } catch {}
-    return { expenses: sampleData(), categories: [...DEFAULT_CATEGORIES] };
+    return { expenses: hostedInClaude ? [] : sampleData(), categories: [...DEFAULT_CATEGORIES], started: false };
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+    if (cloud) flush();
+  }
   const hasSample = () => state.expenses.some((e) => e.sample);
   function clearSample() {
     state.expenses = state.expenses.filter((e) => !e.sample);
+    state.started = true;
     save();
+  }
+
+  // ---------- Sync with the viewer's Claude account ----------
+  let cloud = null;          // { settingsRef, expCol, assets }
+  let cloudReady = false;
+  let dl = null;             // downloads capability
+  const synced = new Map();  // expense id -> canonical JSON last confirmed in the account
+  let syncedSettings = null;
+  let flushing = false, flushAgain = false;
+  let cloudTimer = 0;
+
+  function canon(v) {
+    if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+    if (v && typeof v === "object") {
+      return "{" + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}";
+    }
+    return JSON.stringify(v ?? null);
+  }
+  const cleanExp = (e) => { const o = JSON.parse(JSON.stringify(e)); delete o.sample; return o; };
+  const settingsBody = () => ({ categories: state.categories, started: !!state.started });
+  function setSync(msg) { $("syncText").textContent = msg; $("syncBanner").hidden = !msg; }
+
+  async function withRetry(fn) {
+    try { return await fn(); }
+    catch (e) {
+      if (e && e.code === "unavailable") { await new Promise((r) => setTimeout(r, 600 + Math.random() * 800)); return fn(); }
+      throw e;
+    }
+  }
+
+  // Write only what changed, one write at a time.
+  async function flush() {
+    if (!cloud || !cloudReady) return;
+    if (flushing) { flushAgain = true; return; }
+    flushing = true;
+    try {
+      do {
+        flushAgain = false;
+        const want = new Map(state.expenses.filter((e) => !e.sample).map((e) => [e.id, cleanExp(e)]));
+        for (const [id, body] of want) {
+          const c = canon(body);
+          if (synced.get(id) === c) continue;
+          await withRetry(() => cloud.expCol.doc(id).set(body));
+          synced.set(id, c);
+        }
+        for (const id of [...synced.keys()]) {
+          if (want.has(id)) continue;
+          await withRetry(() => cloud.expCol.doc(id).delete());
+          synced.delete(id);
+        }
+        const sb = settingsBody(), sc = canon(sb);
+        if (sc !== syncedSettings) { await withRetry(() => cloud.settingsRef.set(sb)); syncedSettings = sc; }
+      } while (flushAgain);
+      setSync("");
+    } catch (e) {
+      setSync(e && e.code === "quota_exceeded"
+        ? "Your expense storage is full, so new changes can't be saved. Delete old expenses or PDFs to make room."
+        : "Some changes haven't saved to your account yet. They'll save with your next change.");
+    } finally {
+      flushing = false;
+    }
+  }
+
+  // Merge what's in the account with any changes here that haven't saved yet.
+  function applyRemote(docs) {
+    const local = new Map(state.expenses.filter((e) => !e.sample).map((e) => [e.id, e]));
+    const remote = new Map(docs.map((d) => [d.id, { ...d.data(), id: d.id }]));
+    const next = [];
+    for (const [id, r] of remote) {
+      const l = local.get(id);
+      if (l && canon(cleanExp(l)) !== synced.get(id)) { next.push(l); continue; } // edited here, not saved yet
+      if (!l && synced.has(id)) continue;                                          // deleted here, not saved yet
+      next.push(r);
+      synced.set(id, canon(r));
+    }
+    for (const [id, l] of local) {
+      if (remote.has(id)) continue;
+      if (synced.has(id) && canon(cleanExp(l)) === synced.get(id)) { synced.delete(id); continue; } // deleted on another device
+      next.push(l); // added here, not saved yet
+    }
+    const samples = state.started || next.length ? [] : state.expenses.filter((e) => e.sample);
+    state.expenses = [...next, ...samples];
+  }
+  function applySettings(data) {
+    if (!data) return;
+    if (syncedSettings !== null && canon(settingsBody()) !== syncedSettings) return; // local change not saved yet
+    if (Array.isArray(data.categories) && data.categories.length) state.categories = [...data.categories];
+    if (data.started) state.started = true;
+    syncedSettings = canon({ categories: Array.isArray(data.categories) ? data.categories : [], started: !!data.started });
+  }
+
+  function refresh() {
+    fillSelects();
+    renderBanner();
+    const tab = document.querySelector(".segmented .active").dataset.tab;
+    if (tab === "dashboard") renderDashboard();
+    if (tab === "expenses") renderExpenses();
+  }
+
+  function settleWithoutCloud(msg) {
+    cloudSettled = true;
+    if (!state.started && !state.expenses.length) state.expenses = sampleData();
+    setSync(msg);
+    refresh();
+  }
+
+  async function connectCloud() {
+    if (!hostedInClaude) return;
+    window.claude.use("downloads").then((d) => { dl = d; }).catch(() => {});
+    setSync("Loading your saved expenses…");
+    let db = null, user = null;
+    try { [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]); } catch {}
+    const id = db && user ? await user.id() : null;
+    if (!db || !id) {
+      settleWithoutCloud("Sign in to Claude to save expenses to your account and see them on all your devices. For now, changes stay in this browser.");
+      return;
+    }
+    let assets = null;
+    try { assets = await window.claude.use("assets"); } catch {}
+    cloud = {
+      settingsRef: db.doc(`data/users/${id}/settings`),
+      expCol: db.doc(`data/users/${id}/ledger`).collection("expenses"),
+      assets,
+    };
+    let remoteSettings = null, settingsIn = false, expDocs = null;
+    cloudTimer = setTimeout(() => {
+      if (!cloudReady) setSync("Can't reach your saved expenses yet. Check your connection; this will update once it connects.");
+    }, 10000);
+
+    const init = async () => {
+      if (cloudReady || !settingsIn || !expDocs) return;
+      cloudReady = true;
+      cloudSettled = true;
+      clearTimeout(cloudTimer);
+      const remoteHas = expDocs.length > 0 || !!(remoteSettings && remoteSettings.started);
+      if (remoteHas) {
+        // The account is the source of truth; keep only what was added since this page opened.
+        state.expenses = state.expenses.filter((e) => !e.sample && e.created >= bootTime);
+        applySettings(remoteSettings);
+        applyRemote(expDocs);
+        setSync("");
+      } else if (localHadReal) {
+        setSync("Moving your expenses to your account…");
+        await migrateLocalAttachments();
+        state.started = true;
+      } else {
+        if (!state.started && !state.expenses.length) state.expenses = sampleData();
+        setSync("");
+      }
+      refresh();
+      flush();
+    };
+
+    cloud.settingsRef.onSnapshot((snap) => {
+      remoteSettings = snap.exists ? snap.data() : null;
+      settingsIn = true;
+      if (cloudReady) { applySettings(remoteSettings); refresh(); } else init();
+    }, onCloudError);
+    cloud.expCol.onSnapshot((snap) => {
+      expDocs = snap.docs;
+      if (cloudReady) { applyRemote(snap.docs); refresh(); } else init();
+    }, onCloudError);
+  }
+  function onCloudError(e) {
+    clearTimeout(cloudTimer);
+    if (e && e.code === "revoked") return;
+    if (!cloudReady) { cloud = null; settleWithoutCloud("Your saved expenses couldn't be loaded. Reload to try again; changes made now stay in this browser."); return; }
+    setSync("Live updates from your other devices stopped. Reload to reconnect; your saved expenses are safe.");
+  }
+
+  async function migrateLocalAttachments() {
+    if (!cloud || !cloud.assets) return;
+    for (const e of state.expenses) {
+      const a = e.attachment;
+      if (!a || a.asset || !a.id) continue;
+      try {
+        const f = await getFile(a.id);
+        if (!f) continue;
+        const r = await cloud.assets.upload(new Blob([f.data], { type: "application/pdf" }), { type: "application/pdf" });
+        e.attachment = { asset: r.id, name: a.name, size: a.size };
+      } catch {}
+    }
+  }
+
+  // ---------- Attachment storage: your account when available, else this browser ----------
+  async function storeAttachment(p) {
+    if (cloud && cloud.assets) {
+      const r = await cloud.assets.upload(new Blob([p.data], { type: "application/pdf" }), { type: "application/pdf" });
+      return { asset: r.id, name: p.name, size: p.size };
+    }
+    const id = uid();
+    await putFile(id, { name: p.name, type: "application/pdf", size: p.size, data: p.data });
+    return { id, name: p.name, size: p.size };
+  }
+  function dropAttachment(a) {
+    if (!a) return;
+    if (a.asset) { if (cloud && cloud.assets) cloud.assets.delete(a.asset).catch(() => {}); }
+    else if (a.id) delFile(a.id);
+  }
+  async function attachmentBytes(a) {
+    if (a.asset) {
+      const r = await fetch("/_blob/" + a.asset);
+      if (!r.ok) throw new Error("missing");
+      return r.arrayBuffer();
+    }
+    return (await getFile(a.id))?.data;
   }
 
   function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -808,7 +1031,7 @@
     })
   );
 
-  function renderBanner() { $("sampleBanner").hidden = !hasSample(); }
+  function renderBanner() { $("sampleBanner").hidden = !hasSample() || !cloudSettled; }
   $("clearSample").addEventListener("click", () => {
     clearSample();
     fillSelects();
@@ -1016,13 +1239,12 @@
   async function commitAttachment() {
     const old = ui.editingId ? state.expenses.find((x) => x.id === ui.editingId)?.attachment || null : null;
     if (pending && pending.isNew) {
-      const id = uid();
-      await putFile(id, { name: pending.name, type: "application/pdf", size: pending.size, data: pending.data });
-      if (old) delFile(old.id);
-      return { id, name: pending.name, size: pending.size };
+      const meta = await storeAttachment(pending);
+      dropAttachment(old);
+      return meta;
     }
     if (pending) return old;
-    if (old) delFile(old.id);
+    dropAttachment(old);
     return null;
   }
 
@@ -1041,7 +1263,7 @@
     let attachment = null;
     saving = true;
     try { attachment = await commitAttachment(); }
-    catch { saving = false; setStatus("This browser couldn't save the PDF. Check that it isn't in private browsing mode.", "warn"); return; }
+    catch { saving = false; setStatus("The PDF couldn't be saved. Check your connection and try again.", "warn"); return; }
     saving = false;
     if (ui.editingId) {
       const e = state.expenses.find((x) => x.id === ui.editingId);
@@ -1055,6 +1277,7 @@
     }
     let cleared = false;
     if (hasSample()) { clearSample(); cleared = true; }
+    state.started = true;
     const count = $("repeat").checked ? Math.min(60, Math.max(2, parseInt($("repeatCount").value, 10) || 2)) : 1;
     const series = count > 1 ? uid() : null;
     for (let i = 0; i < count; i++) {
@@ -1085,7 +1308,7 @@
     });
     if (!choice) return;
     const ids = choice === "all" ? [e.id, ...later.map((x) => x.id)] : [e.id];
-    state.expenses.filter((x) => ids.includes(x.id) && x.attachment).forEach((x) => delFile(x.attachment.id));
+    state.expenses.filter((x) => ids.includes(x.id) && x.attachment).forEach((x) => dropAttachment(x.attachment));
     state.expenses = state.expenses.filter((x) => !ids.includes(x.id));
     save();
     toast(ids.length > 1 ? `Deleted ${ids.length} expenses` : "Expense deleted");
@@ -1159,6 +1382,14 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
+  // Save a file: a normal download on the site, Claude's save prompt inside Claude.
+  async function saveFile(name, content, type) {
+    if (!framed) { downloadFile(name, content, type); return "saved"; }
+    if (!dl) return "unavailable";
+    try { await dl.save({ filename: name, data: new Blob([content], { type }) }); return "saved"; }
+    catch (e) { return e && e.code === "declined" ? "declined" : "unavailable"; }
+  }
+  const canSaveFiles = () => !framed || !!dl;
   async function copyText(text, btn) {
     try {
       await navigator.clipboard.writeText(text);
@@ -1171,7 +1402,7 @@
   }
   function exportSheet(title, message, name, content, type) {
     const actions = [{ label: "Copy to Clipboard", style: "btn-primary", keep: true, run: (b) => copyText(content, b) }];
-    if (!framed) actions.push({ label: "Download File", keep: true, run: () => downloadFile(name, content, type) });
+    if (canSaveFiles()) actions.push({ label: "Download File", keep: true, run: async (b) => { const r = await saveFile(name, content, type); if (r === "saved") b.textContent = "Downloaded"; else if (r === "unavailable") b.textContent = "Download isn't available here"; } });
     actions.push({ label: "Done", value: null });
     sheet({ title, message, text: content, actions });
   }
@@ -1184,22 +1415,29 @@
       `expenses-${ui.month}-${todayStr()}.csv`, csv, "text/csv");
   });
   $("backup").addEventListener("click", async () => {
-    const data = { expenses: state.expenses, categories: state.categories };
-    if (!framed) {
+    const data = { expenses: state.expenses.filter((e) => !e.sample), categories: state.categories };
+    if (canSaveFiles()) {
+      toast("Preparing backup…");
       const files = {};
-      for (const e of state.expenses) {
-        if (!e.attachment) continue;
-        try { const f = await getFile(e.attachment.id); if (f) files[e.attachment.id] = { name: f.name, type: f.type, size: f.size, b64: bufToB64(f.data) }; } catch {}
+      for (const e of data.expenses) {
+        const a = e.attachment;
+        if (!a) continue;
+        try {
+          const bytes = await attachmentBytes(a);
+          if (bytes) files[a.asset || a.id] = { name: a.name, type: "application/pdf", size: a.size, b64: bufToB64(bytes) };
+        } catch {}
       }
       data.files = files;
-      downloadFile(`expenses-backup-${todayStr()}.json`, JSON.stringify(data), "application/json");
-      toast(Object.keys(files).length ? `Backup downloaded with ${Object.keys(files).length} PDFs` : "Backup downloaded");
-      return;
+      const n = Object.keys(files).length;
+      const r = await saveFile(`expenses-backup-${todayStr()}.json`, JSON.stringify(data), "application/json");
+      if (r === "saved") { toast(n ? `Backup saved with ${n} PDF${n === 1 ? "" : "s"}` : "Backup saved"); return; }
+      if (r === "declined") return;
+      delete data.files;
     }
-    const n = state.expenses.filter((e) => e.attachment).length;
+    const n = data.expenses.filter((e) => e.attachment).length;
     exportSheet("Back up all data",
       "Copy this and save it as a .json file (for example in Notes or Files). Use Restore to load it later." +
-      (n ? ` Attached PDFs aren't included in a copied backup; use the full app site to back those up.` : ""),
+      (n ? " Attached PDFs aren't included in a copied backup." : ""),
       `expenses-backup-${todayStr()}.json`, JSON.stringify(data, null, 2), "application/json");
   });
   $("restore").addEventListener("click", () => $("restoreFile").click());
@@ -1221,12 +1459,16 @@
       actions: [{ label: "Restore Backup", style: "btn-danger-fill", value: true }, { label: "Cancel", value: null }],
     });
     if (!ok) return;
-    state = { expenses: data.expenses, categories: data.categories?.length ? data.categories : [...DEFAULT_CATEGORIES] };
-    if (data.files) {
-      for (const [id, f] of Object.entries(data.files)) {
-        try { await putFile(id, { name: f.name, type: f.type || "application/pdf", size: f.size, data: b64ToBuf(f.b64) }); } catch {}
-      }
+    toast("Restoring…");
+    const restored = data.expenses.map((e) => ({ ...e }));
+    for (const e of restored) {
+      const a = e.attachment;
+      if (!a) continue;
+      const f = data.files && data.files[a.asset || a.id];
+      if (!f) continue;
+      try { e.attachment = await storeAttachment({ name: a.name, size: a.size, data: b64ToBuf(f.b64) }); } catch {}
     }
+    state = { expenses: restored, categories: data.categories?.length ? data.categories : [...DEFAULT_CATEGORIES], started: true };
     gcFiles();
     save();
     resetForm();
@@ -1288,7 +1530,7 @@
   $("attachView").addEventListener("click", () => {
     if (!pending) return;
     const p = pending;
-    openViewer(p.name, async () => p.data || (await getFile(p.id))?.data);
+    openViewer(p.name, async () => p.data || attachmentBytes(p));
   });
 
   // ---------- PDF viewer ----------
@@ -1304,7 +1546,7 @@
       const [lib, bytes] = await Promise.all([getPdfjs(), getBytes()]);
       if (!bytes) throw new Error("missing");
       viewerBytes = bytes;
-      $("viewerDownload").hidden = framed;
+      $("viewerDownload").hidden = !canSaveFiles();
       const task = lib.getDocument({ data: new Uint8Array(bytes.slice(0)) });
       const doc = await task.promise;
       $("viewerPages").innerHTML = "";
@@ -1327,13 +1569,18 @@
   }
   function closeViewer() { $("viewer").hidden = true; $("viewerPages").innerHTML = ""; viewerBytes = null; document.documentElement.style.overflow = ""; }
   $("viewerClose").addEventListener("click", closeViewer);
-  $("viewerDownload").addEventListener("click", () => { if (viewerBytes) downloadFile(viewerName, viewerBytes, "application/pdf"); });
+  $("viewerDownload").addEventListener("click", async () => {
+    if (!viewerBytes) return;
+    const r = await saveFile(viewerName, viewerBytes, "application/pdf");
+    if (r === "unavailable") toast("Download isn't available here");
+  });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("viewer").hidden) closeViewer(); });
 
   // ---------- Init ----------
   resetForm();
   renderBanner();
   renderDashboard();
+  connectCloud();
 })();
 </script>
 </body>
