@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Business Expenses</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>Business Expenses</title>
 <style>
+  /* Layout: iOS-style grouped lists under a sticky large-title header with a segmented control */
   :root {
     --bg: #f2f2f7;
     --card: #ffffff;
@@ -22,43 +24,47 @@
     --header: rgba(242, 242, 247, 0.82);
     --seg: rgba(118, 118, 128, 0.12);
     --seg-active: #ffffff;
+    --scrim: rgba(0, 0, 0, 0.32);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #000000;
-      --card: #1c1c1e;
-      --fill: #2c2c2e;
-      --text: #f2f2f7;
-      --muted: #8e8e93;
-      --sep: rgba(84, 84, 88, 0.6);
-      --accent: #0a84ff;
-      --accent-soft: rgba(10, 132, 255, 0.2);
-      --green: #30d158;
-      --orange: #ff9f0a;
-      --red: #ff453a;
-      --header: rgba(0, 0, 0, 0.78);
-      --seg: rgba(118, 118, 128, 0.24);
-      --seg-active: #636366;
-      --shadow: none;
+    :root:not([data-theme="light"]) {
+      --bg: #000000; --card: #1c1c1e; --fill: #2c2c2e; --text: #f2f2f7; --muted: #8e8e93;
+      --sep: rgba(84, 84, 88, 0.6); --accent: #0a84ff; --accent-soft: rgba(10, 132, 255, 0.2);
+      --green: #30d158; --orange: #ff9f0a; --red: #ff453a; --header: rgba(0, 0, 0, 0.78);
+      --seg: rgba(118, 118, 128, 0.24); --seg-active: #636366; --scrim: rgba(0, 0, 0, 0.55); --shadow: none;
+      color-scheme: dark;
     }
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--text); }
-  body {
-    font: 17px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    padding-bottom: env(safe-area-inset-bottom);
+  :root[data-theme="dark"] {
+    --bg: #000000; --card: #1c1c1e; --fill: #2c2c2e; --text: #f2f2f7; --muted: #8e8e93;
+    --sep: rgba(84, 84, 88, 0.6); --accent: #0a84ff; --accent-soft: rgba(10, 132, 255, 0.2);
+    --green: #30d158; --orange: #ff9f0a; --red: #ff453a; --header: rgba(0, 0, 0, 0.78);
+    --seg: rgba(118, 118, 128, 0.24); --seg-active: #636366; --scrim: rgba(0, 0, 0, 0.55); --shadow: none;
+    color-scheme: dark;
   }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 17px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+    z-index: 11; background: var(--bg);
+  }
+  button:focus-visible, select:focus-visible, .list-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
   /* Header */
   header {
-    position: sticky; top: 0; z-index: 10;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
     background: var(--header);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
     backdrop-filter: saturate(180%) blur(20px);
     border-bottom: 0.5px solid var(--sep);
-    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    padding-block: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
   .header-inner { max-width: 880px; margin: 0 auto; }
   h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; }
@@ -73,29 +79,38 @@
   }
   .segmented button.active { background: var(--seg-active); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
-  main { max-width: 880px; margin: 0 auto; padding: 20px 16px 48px; }
+  main {
+    max-width: 880px; margin: 0 auto;
+    padding-block: 20px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
   .view { display: none; }
   .view.active { display: block; animation: fade .2s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { transform: translateY(4px); } to { transform: none; } }
 
   .section-title {
-    font-size: 13px; font-weight: 400; text-transform: uppercase; letter-spacing: .02em;
+    font-size: 13px; font-weight: 400; text-transform: uppercase; letter-spacing: .03em;
     color: var(--muted); margin: 24px 16px 8px;
   }
-  .card {
-    background: var(--card); border-radius: 16px; box-shadow: var(--shadow);
-    overflow: hidden;
+  .card { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+
+  /* Sample banner */
+  .banner {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: var(--accent-soft); color: var(--text); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 16px; font-size: 14px;
   }
-  .pad { padding: 16px; }
+  .banner .grow { min-width: 180px; }
+  .banner strong { font-weight: 600; }
 
   /* Toolbar */
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .toolbar .spacer { flex: 1; }
   .pill-select {
     appearance: none; -webkit-appearance: none;
-    border: 0; background: var(--card); color: var(--accent);
+    border: 0; background-color: var(--card); color: var(--accent);
     font-family: inherit; font-size: 15px; font-weight: 600; line-height: 1;
-    padding: 9px 30px 9px 14px; border-radius: 99px; box-shadow: var(--shadow);
+    padding: 9px 30px 9px 14px; border-radius: 99px; box-shadow: var(--shadow); max-width: 100%;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23007aff' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 12px center;
     cursor: pointer;
@@ -104,7 +119,7 @@
   /* Stats */
   .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
   @media (min-width: 640px) { .stats { grid-template-columns: repeat(4, 1fr); } }
-  .stat { padding: 14px 16px; }
+  .stat { padding: 14px 16px; min-width: 0; }
   .stat .label { font-size: 13px; color: var(--muted); }
   .stat .value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .stat .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -125,13 +140,9 @@
   .tooltip { font-size: 13px; color: var(--muted); padding: 0 16px 14px; min-height: 18px; }
 
   /* Lists (iOS grouped) */
-  .list-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; position: relative; cursor: pointer;
-  }
+  .list-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; position: relative; cursor: pointer; }
   .list-row + .list-row::before {
-    content: ""; position: absolute; top: 0; left: 16px; right: 0;
-    border-top: 0.5px solid var(--sep);
+    content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 0.5px solid var(--sep);
   }
   .list-row:active { background: var(--fill); }
   .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
@@ -148,6 +159,7 @@
     padding: 2px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px;
   }
   .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+  .action-row .grow { color: var(--accent); }
 
   /* Category x month table */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -160,35 +172,30 @@
 
   /* Form */
   .form-group { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
-  .field {
-    display: flex; align-items: center; gap: 12px;
-    padding: 0 16px; min-height: 48px; position: relative;
-  }
+  .field { display: flex; align-items: center; gap: 12px; padding: 0 16px; min-height: 48px; position: relative; }
   .field + .field::before {
-    content: ""; position: absolute; top: 0; left: 16px; right: 0;
-    border-top: 0.5px solid var(--sep);
+    content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 0.5px solid var(--sep);
   }
-  .field label { width: 120px; flex: none; }
+  .field > label:first-child { width: 120px; flex: none; }
   .field input, .field select {
     flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text);
     font: inherit; padding: 12px 0; text-align: right; outline: none;
     appearance: none; -webkit-appearance: none;
   }
-  .field select { text-align-last: right; direction: ltr; cursor: pointer; color: var(--accent); }
+  .field select { text-align-last: right; cursor: pointer; color: var(--accent); }
   .field input::placeholder { color: var(--muted); opacity: .7; }
   .field input[type="date"] { color: var(--accent); }
   .amount-field input { font-size: 22px; font-weight: 600; }
   .switch { position: relative; width: 51px; height: 31px; flex: none; }
   .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-  .switch span {
-    position: absolute; inset: 0; background: var(--seg); border-radius: 99px; transition: .2s; cursor: pointer;
-  }
+  .switch span { position: absolute; inset: 0; background: var(--seg); border-radius: 99px; transition: .2s; cursor: pointer; }
   .switch span::after {
     content: ""; position: absolute; width: 27px; height: 27px; left: 2px; top: 2px;
     background: #fff; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.2); transition: .2s;
   }
   .switch input:checked + span { background: var(--green); }
   .switch input:checked + span::after { transform: translateX(20px); }
+  .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
   .footnote { font-size: 13px; color: var(--muted); margin: 8px 16px 0; }
 
   .btn {
@@ -199,16 +206,46 @@
   .btn-primary:active { opacity: .85; }
   .btn-plain { background: var(--card); color: var(--accent); box-shadow: var(--shadow); }
   .btn-danger { background: var(--card); color: var(--red); box-shadow: var(--shadow); }
+  .btn-danger-fill { background: var(--red); color: #fff; }
   .btn-row { display: grid; gap: 10px; margin-top: 20px; }
-  .text-btn { border: 0; background: none; color: var(--accent); font: inherit; font-size: 15px; cursor: pointer; padding: 6px 4px; }
+  .text-btn { border: 0; background: none; color: var(--accent); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; padding: 6px 4px; }
 
   .search {
     width: 100%; border: 0; border-radius: 10px; background: var(--seg); color: var(--text);
     font: inherit; padding: 9px 12px; outline: none; margin-top: 10px;
   }
 
+  /* Sheet (in-app dialogs) */
+  .sheet-backdrop {
+    position: fixed; inset: 0; z-index: 40; background: var(--scrim);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; transition: opacity .2s;
+    padding-top: 16px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+  }
+  @media (min-width: 640px) { .sheet-backdrop { align-items: center; } }
+  .sheet-backdrop.open { opacity: 1; }
+  .sheet {
+    width: 100%; max-width: 440px; background: var(--card); border-radius: 20px;
+    padding: 20px 16px 16px; display: grid; gap: 12px;
+    transform: translateY(24px); transition: transform .25s ease;
+  }
+  .sheet-backdrop.open .sheet { transform: none; }
+  .sheet h3 { margin: 0; font-size: 17px; text-align: center; text-wrap: balance; }
+  .sheet p { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+  .sheet input, .sheet textarea {
+    width: 100%; border: 0; border-radius: 10px; background: var(--fill); color: var(--text);
+    font: inherit; padding: 12px; outline: none;
+  }
+  .sheet textarea { height: 170px; resize: none; font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .sheet-actions { display: grid; gap: 8px; }
+  .sheet .btn { padding: 14px; }
+  .sheet .btn-plain { background: var(--fill); box-shadow: none; }
+
   .toast {
-    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom));
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
     background: rgba(28,28,30,.92); color: #fff; padding: 12px 18px; border-radius: 99px;
     font-size: 15px; font-weight: 500; transition: .25s; z-index: 50;
@@ -216,7 +253,6 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%); }
   .month-head { display: flex; justify-content: space-between; align-items: baseline; }
-  .month-head .section-title { margin-bottom: 8px; }
   .month-total { font-size: 13px; color: var(--muted); margin: 24px 16px 8px; font-variant-numeric: tabular-nums; }
 </style>
 </head>
@@ -225,19 +261,23 @@
   <div class="header-inner">
     <h1 id="pageTitle">Dashboard</h1>
     <nav class="segmented" role="tablist">
-      <button class="active" data-tab="dashboard">Dashboard</button>
-      <button data-tab="add">Add</button>
-      <button data-tab="expenses">Expenses</button>
+      <button class="active" data-tab="dashboard" id="tab-dashboard">Dashboard</button>
+      <button data-tab="add" id="tab-add">Add</button>
+      <button data-tab="expenses" id="tab-expenses">Expenses</button>
     </nav>
   </div>
 </header>
 
 <main>
+  <div class="banner" id="sampleBanner" hidden>
+    <div class="grow"><strong>You're viewing sample data.</strong> It clears automatically when you add your first expense.</div>
+    <button class="text-btn" id="clearSample" type="button">Clear now</button>
+  </div>
+
   <!-- DASHBOARD -->
   <section class="view active" id="view-dashboard">
     <div class="toolbar">
       <select class="pill-select" id="yearSelect" aria-label="Year"></select>
-      <div class="spacer"></div>
     </div>
 
     <div class="stats">
@@ -302,20 +342,20 @@
         <div class="form-group">
           <div class="field">
             <label for="repeat" style="width:auto;flex:1">Repeat monthly</label>
-            <label class="switch" style="width:51px"><input id="repeat" type="checkbox"><span></span></label>
+            <label class="switch"><input id="repeat" type="checkbox"><span></span></label>
           </div>
-          <div class="field" id="repeatCountRow" style="display:none">
+          <div class="field" id="repeatCountRow" hidden>
             <label for="repeatCount">Number of months</label>
             <input id="repeatCount" type="number" inputmode="numeric" min="2" max="60" value="12">
           </div>
         </div>
-        <p class="footnote" id="repeatNote">Use this for rent, subscriptions and other fixed bills. Pick a past start date to fill in earlier months, or a future one to schedule ahead.</p>
+        <p class="footnote">Use this for rent, subscriptions and other fixed bills. Pick a past start date to fill in earlier months, or a future one to schedule ahead.</p>
       </div>
 
       <div class="btn-row">
         <button class="btn btn-primary" type="submit" id="submitBtn">Add Expense</button>
-        <button class="btn btn-danger" type="button" id="deleteBtn" style="display:none">Delete Expense</button>
-        <button class="btn btn-plain" type="button" id="cancelBtn" style="display:none">Cancel</button>
+        <button class="btn btn-danger" type="button" id="deleteBtn" hidden>Delete Expense</button>
+        <button class="btn btn-plain" type="button" id="cancelBtn" hidden>Cancel</button>
       </div>
     </form>
   </section>
@@ -331,17 +371,27 @@
 
     <div class="section-title">Data</div>
     <div class="card">
-      <div class="list-row" id="exportCsv"><div class="grow" style="color:var(--accent)">Export current view to CSV</div></div>
-      <div class="list-row" id="backup"><div class="grow" style="color:var(--accent)">Download backup</div></div>
-      <div class="list-row" id="restore"><div class="grow" style="color:var(--accent)">Restore from backup</div></div>
-      <div class="list-row" id="manageCats"><div class="grow" style="color:var(--accent)">Add a category</div></div>
+      <div class="list-row action-row" id="exportCsv" tabindex="0"><div class="grow">Export current view as CSV</div></div>
+      <div class="list-row action-row" id="backup" tabindex="0"><div class="grow">Back up all data</div></div>
+      <div class="list-row action-row" id="restore" tabindex="0"><div class="grow">Restore from backup file</div></div>
+      <div class="list-row action-row" id="manageCats" tabindex="0"><div class="grow">Add a category</div></div>
     </div>
-    <p class="footnote">Your data is saved in this browser on this device. Download a backup regularly, and use Restore to move it to another device.</p>
-    <input type="file" id="restoreFile" accept="application/json" hidden>
+    <p class="footnote">Your data is saved in this browser on this device. Back up regularly, and use Restore to move it to another device.</p>
+    <input type="file" id="restoreFile" accept="application/json,.json" hidden>
   </section>
 </main>
 
-<div class="toast" id="toast"></div>
+<div class="sheet-backdrop" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h3 id="sheetTitle"></h3>
+    <p id="sheetMsg"></p>
+    <input id="sheetInput" type="text" maxlength="60" hidden>
+    <textarea id="sheetText" readonly hidden></textarea>
+    <div class="sheet-actions" id="sheetActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 (() => {
@@ -364,6 +414,40 @@
   const moneyShort = (v) => v >= 10000 ? "$" + (v / 1000).toFixed(v >= 100000 ? 0 : 1) + "k" : money.format(v);
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const pad = (n) => String(n).padStart(2, "0");
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const sum = (arr) => arr.reduce((s, e) => s + e.amount, 0);
+  const framed = (() => { try { return window.self !== window.top; } catch { return true; } })();
+
+  // ---------- Sample data (shown until the first real expense) ----------
+  function sampleData() {
+    const now = new Date();
+    const y = now.getFullYear(), nowM = now.getMonth();
+    const out = [];
+    const add = (m, d, amount, category, payee, method, note = "") => {
+      const first = new Date(y, m, 1);
+      const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+      const date = `${first.getFullYear()}-${pad(first.getMonth() + 1)}-${pad(Math.min(d, last))}`;
+      out.push({ id: uid(), amount, category, payee, method, note, date, created: out.length, sample: true });
+    };
+    const marketing = [320, 410, 275, 560, 480, 390, 610, 450, 520, 700, 380, 440];
+    const supplies = [64, 0, 142, 38, 0, 95, 51, 0, 128, 73, 0, 88];
+    const fuel = [180, 165, 210, 195, 240, 260, 255, 230, 205, 190, 175, 185];
+    for (let m = 0; m <= nowM + 2; m++) {
+      add(m, 1, 2400, "Rent & Lease", "Northgate Commercial Leasing", "Pre-Authorized Debit", "Unit 4 lease");
+      add(m, 5, 89.99, "Software & Subscriptions", "Design software", "Business Credit Card", "Monthly plan");
+      add(m, 15, 4200, "Payroll", "Staff payroll", "Bank Transfer / EFT");
+      add(m, 20, 118.5, "Phone & Internet", "Prairie Telecom", "Pre-Authorized Debit");
+      if (m % 3 === 0) add(m, 15, 1200, "Insurance", "Harvest Insurance Group", "Cheque", "Quarterly premium");
+      if (m <= nowM) {
+        add(m, 12, marketing[m % 12], "Marketing & Advertising", "Social media ads", "Business Credit Card");
+        if (supplies[m % 12]) add(m, 8, supplies[m % 12], "Office Supplies", "Staples", "Debit Card");
+        add(m, 24, fuel[m % 12], "Vehicle & Fuel", "Co-op Gas Bar", "Business Credit Card");
+        add(m, 28, 34.75, "Bank & Merchant Fees", "Bank service charge", "Pre-Authorized Debit");
+      }
+    }
+    return out;
+  }
 
   // ---------- State ----------
   let state = load();
@@ -374,30 +458,26 @@
       const s = JSON.parse(localStorage.getItem(KEY));
       if (s && Array.isArray(s.expenses)) return { expenses: s.expenses, categories: s.categories?.length ? s.categories : [...DEFAULT_CATEGORIES] };
     } catch {}
-    return { expenses: [], categories: [...DEFAULT_CATEGORIES] };
+    return { expenses: sampleData(), categories: [...DEFAULT_CATEGORIES] };
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
-
-  function todayStr() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const hasSample = () => state.expenses.some((e) => e.sample);
+  function clearSample() {
+    state.expenses = state.expenses.filter((e) => !e.sample);
+    save();
   }
+
+  function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
   const thisMonth = () => todayStr().slice(0, 7);
   function addMonths(dateStr, n) {
     const [y, m, d] = dateStr.split("-").map(Number);
     const target = new Date(y, m - 1 + n, 1);
     const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-    target.setDate(Math.min(d, last));
-    return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
+    return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(Math.min(d, last))}`;
   }
-  const monthName = (ym, style = "long") => {
-    const [y, m] = ym.split("-").map(Number);
-    return new Date(y, m - 1, 1).toLocaleDateString("en-CA", { month: style, year: "numeric" });
-  };
+  const monthName = (ym) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-CA", { month: "long", year: "numeric" }); };
   const fmtDate = (s) => new Date(s + "T00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
   const colorFor = (cat) => PALETTE[Math.max(0, state.categories.indexOf(cat)) % PALETTE.length];
-  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
-  const sum = (arr) => arr.reduce((s, e) => s + e.amount, 0);
 
   function toast(msg) {
     const t = $("toast");
@@ -407,12 +487,56 @@
     toast._t = setTimeout(() => t.classList.remove("show"), 2000);
   }
 
+  // ---------- In-app sheet (replaces alert/confirm/prompt) ----------
+  // actions: [{ label, value, style, keep, run }]; value "__input" returns the text field.
+  function sheet({ title, message = "", input = null, text = null, actions }) {
+    return new Promise((resolve) => {
+      const bd = $("sheet");
+      $("sheetTitle").textContent = title;
+      $("sheetMsg").textContent = message;
+      $("sheetMsg").hidden = !message;
+      const inp = $("sheetInput");
+      inp.hidden = !input;
+      if (input) { inp.value = input.value || ""; inp.placeholder = input.placeholder || ""; }
+      const ta = $("sheetText");
+      ta.hidden = text == null;
+      if (text != null) ta.value = text;
+      $("sheetActions").innerHTML = actions.map((a, i) =>
+        `<button type="button" class="btn ${a.style || "btn-plain"}" data-i="${i}">${esc(a.label)}</button>`).join("");
+      bd.hidden = false;
+      requestAnimationFrame(() => bd.classList.add("open"));
+      setTimeout(() => (input ? inp : $("sheetActions").querySelector("button"))?.focus(), 60);
+
+      const close = (v) => {
+        bd.classList.remove("open");
+        document.removeEventListener("keydown", onKey);
+        setTimeout(() => (bd.hidden = true), 200);
+        resolve(v);
+      };
+      const onKey = (e) => {
+        if (e.key === "Escape") close(null);
+        if (e.key === "Enter" && input && document.activeElement === inp) { e.preventDefault(); close(inp.value.trim()); }
+      };
+      document.addEventListener("keydown", onKey);
+      $("sheetActions").onclick = (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        const a = actions[+b.dataset.i];
+        if (a.run) a.run(b);
+        if (a.keep) return;
+        close(a.value === "__input" ? inp.value.trim() : a.value);
+      };
+      bd.onclick = (e) => { if (e.target === bd) close(null); };
+    });
+  }
+
   // ---------- Tabs ----------
   const TITLES = { dashboard: "Dashboard", add: "Add Expense", expenses: "Expenses" };
   function showTab(name) {
     document.querySelectorAll(".segmented button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
     document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + name));
     $("pageTitle").textContent = name === "add" && ui.editingId ? "Edit Expense" : TITLES[name];
+    renderBanner();
     if (name === "dashboard") renderDashboard();
     if (name === "expenses") renderExpenses();
     window.scrollTo({ top: 0 });
@@ -423,6 +547,14 @@
       showTab(b.dataset.tab);
     })
   );
+
+  function renderBanner() { $("sampleBanner").hidden = !hasSample(); }
+  $("clearSample").addEventListener("click", () => {
+    clearSample();
+    fillSelects();
+    toast("Sample data cleared");
+    showTab(document.querySelector(".segmented .active").dataset.tab);
+  });
 
   // ---------- Dashboard ----------
   function years() {
@@ -443,7 +575,6 @@
     const paidYear = yearExp.filter((e) => e.date <= today);
     const futureYear = yearExp.filter((e) => e.date > today);
 
-    // Stats
     $("yearLabel").textContent = `${ui.year} total`;
     $("statYear").textContent = moneyShort(sum(yearExp));
     $("statYearHint").textContent = futureYear.length ? `${moneyShort(sum(paidYear))} paid so far` : `${yearExp.length} expense${yearExp.length === 1 ? "" : "s"}`;
@@ -456,15 +587,15 @@
       const diff = ((sum(monthExp) - prevTotal) / prevTotal) * 100;
       $("statMonthHint").textContent = `${diff >= 0 ? "▲" : "▼"} ${Math.abs(diff).toFixed(0)}% vs last month`;
     } else {
-      $("statMonthHint").textContent = monthName(tm, "long").split(" ")[0];
+      $("statMonthHint").textContent = monthName(tm).split(" ")[0];
     }
 
     const byMonth = Array.from({ length: 12 }, (_, i) => {
-      const ym = `${ui.year}-${String(i + 1).padStart(2, "0")}`;
+      const ym = `${ui.year}-${pad(i + 1)}`;
       return { ym, total: sum(yearExp.filter((e) => e.date.startsWith(ym))) };
     });
     const activeMonths = byMonth.filter((m) => m.total > 0);
-    $("statAvg").textContent = moneyShort(activeMonths.length ? sum(activeMonths.map((m) => ({ amount: m.total }))) / activeMonths.length : 0);
+    $("statAvg").textContent = moneyShort(activeMonths.length ? activeMonths.reduce((s, m) => s + m.total, 0) / activeMonths.length : 0);
 
     const upcoming = state.expenses.filter((e) => e.date > today);
     $("statUpcoming").textContent = moneyShort(sum(upcoming));
@@ -497,7 +628,7 @@
     const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
     $("categoryList").innerHTML = cats.length
       ? cats.map(([c, v]) => `
-          <div class="list-row" data-cat="${esc(c)}">
+          <div class="list-row" data-cat="${esc(c)}" tabindex="0">
             <span class="dot" style="background:${colorFor(c)}"></span>
             <div class="grow">
               <div class="title">${esc(c)}</div>
@@ -509,7 +640,7 @@
             </div>
             <span class="chev">›</span>
           </div>`).join("")
-      : `<div class="empty">No expenses in ${ui.year} yet.<br><button class="text-btn" id="emptyAdd">Add your first expense</button></div>`;
+      : `<div class="empty">No expenses in ${ui.year} yet.<br><button class="text-btn" id="emptyAdd" type="button">Add your first expense</button></div>`;
     $("categoryList").querySelectorAll("[data-cat]").forEach((r) =>
       r.addEventListener("click", () => {
         ui.category = r.dataset.cat; ui.month = "all"; ui.search = ""; $("search").value = "";
@@ -535,14 +666,21 @@
 
   // ---------- Form ----------
   function fillSelects() {
+    const keep = $("category").value;
     $("category").innerHTML = state.categories.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("") + `<option value="__new">+ New category…</option>`;
-    $("method").innerHTML = METHODS.map((m) => `<option>${m}</option>`).join("");
+    if (keep && state.categories.includes(keep)) $("category").value = keep;
+    if (!$("method").options.length) $("method").innerHTML = METHODS.map((m) => `<option>${m}</option>`).join("");
     const payees = [...new Set(state.expenses.map((e) => e.payee).filter(Boolean))].sort();
     $("payeeList").innerHTML = payees.map((p) => `<option value="${esc(p)}">`).join("");
   }
 
-  function addCategory() {
-    const name = (prompt("New category name") || "").trim();
+  async function addCategory() {
+    const name = await sheet({
+      title: "New category",
+      message: "It will appear in the category list for new expenses.",
+      input: { placeholder: "e.g. Contractors" },
+      actions: [{ label: "Add Category", style: "btn-primary", value: "__input" }, { label: "Cancel", value: null }],
+    });
     if (!name) return null;
     if (!state.categories.includes(name)) {
       state.categories.splice(state.categories.length - 1, 0, name);
@@ -554,23 +692,25 @@
   }
 
   let lastCategory = state.categories[0];
-  $("category").addEventListener("change", (e) => {
+  $("category").addEventListener("change", async (e) => {
     if (e.target.value === "__new") {
-      const n = addCategory();
-      $("category").value = n || lastCategory;
+      $("category").value = lastCategory;
+      const n = await addCategory();
+      if (n) $("category").value = n;
     }
     lastCategory = $("category").value;
   });
 
-  // Remember last payment method used per payee
+  // Fill in the usual category and payment method for a known payee
   $("payee").addEventListener("change", () => {
     const prev = [...state.expenses].reverse().find((e) => e.payee.toLowerCase() === $("payee").value.trim().toLowerCase());
-    if (prev && !ui.editingId) { $("method").value = prev.method; if (state.categories.includes(prev.category)) $("category").value = prev.category; }
+    if (prev && !ui.editingId) {
+      $("method").value = prev.method;
+      if (state.categories.includes(prev.category)) { $("category").value = prev.category; lastCategory = prev.category; }
+    }
   });
 
-  $("repeat").addEventListener("change", (e) => {
-    $("repeatCountRow").style.display = e.target.checked ? "" : "none";
-  });
+  $("repeat").addEventListener("change", (e) => { $("repeatCountRow").hidden = !e.target.checked; });
 
   function resetForm() {
     ui.editingId = null;
@@ -578,31 +718,31 @@
     fillSelects();
     $("date").value = todayStr();
     $("category").value = lastCategory;
-    $("repeatCountRow").style.display = "none";
-    $("repeatBlock").style.display = "";
+    $("repeatCountRow").hidden = true;
+    $("repeatBlock").hidden = false;
     $("formTitle").textContent = "New expense";
     $("submitBtn").textContent = "Add Expense";
-    $("deleteBtn").style.display = "none";
-    $("cancelBtn").style.display = "none";
+    $("deleteBtn").hidden = true;
+    $("cancelBtn").hidden = true;
   }
 
   function editExpense(id) {
     const e = state.expenses.find((x) => x.id === id);
     if (!e) return;
+    if (!state.categories.includes(e.category)) { state.categories.splice(state.categories.length - 1, 0, e.category); save(); }
     fillSelects();
     ui.editingId = id;
     $("amount").value = e.amount.toFixed(2);
-    if (!state.categories.includes(e.category)) { state.categories.splice(state.categories.length - 1, 0, e.category); fillSelects(); }
     $("category").value = e.category;
     $("date").value = e.date;
     $("payee").value = e.payee;
     $("method").value = e.method;
     $("note").value = e.note || "";
-    $("repeatBlock").style.display = "none";
+    $("repeatBlock").hidden = true;
     $("formTitle").textContent = "Edit expense";
     $("submitBtn").textContent = "Save Changes";
-    $("deleteBtn").style.display = "";
-    $("cancelBtn").style.display = "";
+    $("deleteBtn").hidden = false;
+    $("cancelBtn").hidden = false;
     showTab("add");
   }
 
@@ -626,6 +766,8 @@
       showTab("expenses");
       return;
     }
+    let cleared = false;
+    if (hasSample()) { clearSample(); cleared = true; }
     const count = $("repeat").checked ? Math.min(60, Math.max(2, parseInt($("repeatCount").value, 10) || 2)) : 1;
     const series = count > 1 ? uid() : null;
     for (let i = 0; i < count; i++) {
@@ -633,7 +775,8 @@
     }
     lastCategory = base.category;
     save();
-    toast(count > 1 ? `Added ${count} monthly expenses` : "Expense added");
+    renderBanner();
+    toast((count > 1 ? `Added ${count} monthly expenses` : "Expense added") + (cleared ? " · sample data cleared" : ""));
     const keepDate = $("date").value;
     resetForm();
     $("date").value = keepDate;
@@ -641,16 +784,20 @@
   });
 
   $("cancelBtn").addEventListener("click", () => { resetForm(); showTab("expenses"); });
-  $("deleteBtn").addEventListener("click", () => {
+  $("deleteBtn").addEventListener("click", async () => {
     const e = state.expenses.find((x) => x.id === ui.editingId);
     if (!e) return;
-    let ids = [e.id];
-    if (e.series) {
-      const later = state.expenses.filter((x) => x.series === e.series && x.date > e.date);
-      if (later.length && confirm(`This is part of a monthly series. Also delete the ${later.length} later payment${later.length === 1 ? "" : "s"}?\n\nOK = delete this and later ones\nCancel = choose again`)) {
-        ids = ids.concat(later.map((x) => x.id));
-      } else if (!confirm("Delete just this one expense?")) return;
-    } else if (!confirm("Delete this expense?")) return;
+    const later = e.series ? state.expenses.filter((x) => x.series === e.series && x.date > e.date) : [];
+    const actions = [{ label: "Delete This Expense", style: "btn-danger-fill", value: "one" }];
+    if (later.length) actions.push({ label: `Delete This and ${later.length} Later`, style: "btn-danger-fill", value: "all" });
+    actions.push({ label: "Cancel", value: null });
+    const choice = await sheet({
+      title: later.length ? "Delete a monthly expense?" : "Delete this expense?",
+      message: `${e.payee} · ${money.format(e.amount)} · ${fmtDate(e.date)}`,
+      actions,
+    });
+    if (!choice) return;
+    const ids = choice === "all" ? [e.id, ...later.map((x) => x.id)] : [e.id];
     state.expenses = state.expenses.filter((x) => !ids.includes(x.id));
     save();
     toast(ids.length > 1 ? `Deleted ${ids.length} expenses` : "Expense deleted");
@@ -679,7 +826,7 @@
 
     const list = currentList();
     if (!list.length) {
-      $("expenseGroups").innerHTML = `<div class="section-title">&nbsp;</div><div class="card"><div class="empty">No expenses match.<br><button class="text-btn" id="emptyAdd2">Add an expense</button></div></div>`;
+      $("expenseGroups").innerHTML = `<div class="section-title">&nbsp;</div><div class="card"><div class="empty">No expenses match.<br><button class="text-btn" id="emptyAdd2" type="button">Add an expense</button></div></div>`;
       $("emptyAdd2").addEventListener("click", () => showTab("add"));
       return;
     }
@@ -693,7 +840,7 @@
       </div>
       <div class="card">
         ${items.map((e) => `
-          <div class="list-row" data-id="${e.id}">
+          <div class="list-row" data-id="${e.id}" tabindex="0">
             <span class="dot" style="background:${colorFor(e.category)}"></span>
             <div class="grow">
               <div class="title">${esc(e.payee)}${e.date > today ? '<span class="badge">Upcoming</span>' : ""}</div>
@@ -709,8 +856,13 @@
   $("filterCategory").addEventListener("change", (e) => { ui.category = e.target.value; renderExpenses(); });
   $("search").addEventListener("input", (e) => { ui.search = e.target.value; renderExpenses(); });
 
+  // Keyboard: Enter/Space on focusable rows acts like a tap
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("list-row")) { e.preventDefault(); e.target.click(); }
+  });
+
   // ---------- Data ----------
-  function download(name, content, type) {
+  function downloadFile(name, content, type) {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([content], { type }));
     a.download = name;
@@ -719,37 +871,67 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied";
+    } catch {
+      $("sheetText").focus();
+      $("sheetText").select();
+      btn.textContent = "Selected. Copy it from the box.";
+    }
+  }
+  function exportSheet(title, message, name, content, type) {
+    const actions = [{ label: "Copy to Clipboard", style: "btn-primary", keep: true, run: (b) => copyText(content, b) }];
+    if (!framed) actions.push({ label: "Download File", keep: true, run: () => downloadFile(name, content, type) });
+    actions.push({ label: "Done", value: null });
+    sheet({ title, message, text: content, actions });
+  }
+
   $("exportCsv").addEventListener("click", () => {
     const rows = [["Date", "Category", "Amount", "Paid To", "Payment Method", "Note"],
       ...currentList().map((e) => [e.date, e.category, e.amount.toFixed(2), e.payee, e.method, e.note || ""])];
     const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    download(`expenses-${ui.month}-${todayStr()}.csv`, csv, "text/csv");
+    exportSheet("Export CSV", `${rows.length - 1} expenses. Paste into Excel, Numbers or Google Sheets.`,
+      `expenses-${ui.month}-${todayStr()}.csv`, csv, "text/csv");
   });
   $("backup").addEventListener("click", () => {
-    download(`expenses-backup-${todayStr()}.json`, JSON.stringify(state, null, 2), "application/json");
+    const json = JSON.stringify({ expenses: state.expenses, categories: state.categories }, null, 2);
+    exportSheet("Back up all data", framed
+        ? "Copy this and save it as a .json file (for example in Notes or Files). Use Restore to load it later."
+        : "Download the file and keep it somewhere safe. Use Restore to load it later.",
+      `expenses-backup-${todayStr()}.json`, json, "application/json");
   });
   $("restore").addEventListener("click", () => $("restoreFile").click());
   $("restoreFile").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
     if (!file) return;
+    let data;
     try {
-      const data = JSON.parse(await file.text());
+      data = JSON.parse(await file.text());
       if (!Array.isArray(data.expenses)) throw new Error();
-      if (!confirm(`Replace current data with ${data.expenses.length} expenses from this backup?`)) return;
-      state = { expenses: data.expenses, categories: data.categories?.length ? data.categories : [...DEFAULT_CATEGORIES] };
-      save();
-      resetForm();
-      renderExpenses();
-      toast("Backup restored");
     } catch {
-      alert("That file isn't a valid backup.");
+      await sheet({ title: "Can't restore this file", message: "Choose a .json file made with “Back up all data”.", actions: [{ label: "OK", style: "btn-primary", value: null }] });
+      return;
     }
+    const ok = await sheet({
+      title: "Replace current data?",
+      message: `This backup has ${data.expenses.length} expenses. Your current data will be replaced.`,
+      actions: [{ label: "Restore Backup", style: "btn-danger-fill", value: true }, { label: "Cancel", value: null }],
+    });
+    if (!ok) return;
+    state = { expenses: data.expenses, categories: data.categories?.length ? data.categories : [...DEFAULT_CATEGORIES] };
+    save();
+    resetForm();
+    showTab("expenses");
+    toast("Backup restored");
   });
-  $("manageCats").addEventListener("click", () => { addCategory(); renderExpenses(); });
+  $("manageCats").addEventListener("click", async () => { await addCategory(); renderExpenses(); });
 
   // ---------- Init ----------
   resetForm();
+  renderBanner();
   renderDashboard();
 })();
 </script>
